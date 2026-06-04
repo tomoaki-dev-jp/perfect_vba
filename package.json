@@ -1,0 +1,246 @@
+{
+  "name": "perfect-vba",
+  "displayName": "Perfect VBA",
+  "description": "Excel / Access の VBA を VSCode 上で取り込み(Pull)・編集・書き戻し(Push)・実行(Run)できる拡張機能",
+  "version": "0.2.0",
+  "publisher": "tomo",
+  "author": "tomo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tomoaki-dev-jp/perfect-vba.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tomoaki-dev-jp/perfect-vba/issues"
+  },
+  "homepage": "https://github.com/tomoaki-dev-jp/perfect-vba#readme",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "vba",
+    "excel",
+    "access",
+    "office",
+    "macro"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/.perfect-vba.json",
+    "onLanguage:vba"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "perfectVba.pull",
+        "title": "Perfect VBA: Office ファイルから取り込み (Pull)",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "perfectVba.push",
+        "title": "Perfect VBA: Office ファイルへ書き戻し (Push)",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "perfectVba.pushActiveFile",
+        "title": "Perfect VBA: このファイルを Push",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "perfectVba.run",
+        "title": "Perfect VBA: マクロを実行 (Run)",
+        "icon": "$(play)"
+      },
+      {
+        "command": "perfectVba.refresh",
+        "title": "Perfect VBA: 再取り込み (Refresh)",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "perfectVba.refreshTree",
+        "title": "Perfect VBA: 一覧を更新",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "perfectVba.enableTrust",
+        "title": "Perfect VBA: VBA プロジェクトへのアクセスを信頼する設定を有効化"
+      },
+      {
+        "command": "perfectVba.openSource",
+        "title": "Perfect VBA: 紐づく Office ファイルを開く",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "configuration": {
+      "title": "Perfect VBA",
+      "properties": {
+        "perfectVba.workspaceRoot": {
+          "type": "string",
+          "default": ".vba",
+          "description": "取り込んだ VBA を格納するワークスペース内のルートフォルダ。"
+        },
+        "perfectVba.encoding": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "shift_jis",
+            "utf-8"
+          ],
+          "default": "auto",
+          "description": "標準/クラス/フォームモジュールのエンコーディング。auto はシステムの ANSI コードページ(日本語環境では Shift_JIS)。"
+        },
+        "perfectVba.headless": {
+          "type": "boolean",
+          "default": false,
+          "description": "拡張機能が Office を起動する際、ウィンドウを非表示(ヘッドレス)にする。既定はオフ(可視)。"
+        },
+        "perfectVba.powerShellPath": {
+          "type": "string",
+          "default": "powershell.exe",
+          "description": "使用する PowerShell 実行ファイルのパス。"
+        },
+        "perfectVba.saveAfterPush": {
+          "type": "boolean",
+          "default": true,
+          "description": "Push 後に Office ファイルを保存する。"
+        },
+        "perfectVba.includeDocumentModules": {
+          "type": "boolean",
+          "default": true,
+          "description": "ThisWorkbook / Sheet / フォーム・レポートのコードビハインドも取り込み・書き戻し対象にする。"
+        },
+        "perfectVba.pushBeforeRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "マクロ実行(Run)の前に、対象モジュール（またはプロジェクト）を自動で Push して保存する。オフにすると Office 側の現在のコードを実行する。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "perfectVba",
+          "title": "Perfect VBA",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "perfectVba": [
+        {
+          "id": "perfectVbaProjects",
+          "name": "VBA プロジェクト",
+          "icon": "media/icon.svg",
+          "contextualTitle": "Perfect VBA"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "perfectVbaProjects",
+        "contents": "まだ VBA プロジェクトを取り込んでいません。\n[Office ファイルから取り込み (Pull)](command:perfectVba.pull)\nExcel(.xlsm/.xlsb/.xlam) または Access(.accdb/.mdb) を選択してください。"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "perfectVba.pull",
+          "when": "view == perfectVbaProjects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "perfectVba.refreshTree",
+          "when": "view == perfectVbaProjects",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "perfectVba.run",
+          "when": "view == perfectVbaProjects && viewItem == vbaProject",
+          "group": "inline@0"
+        },
+        {
+          "command": "perfectVba.push",
+          "when": "view == perfectVbaProjects && viewItem == vbaProject",
+          "group": "inline@2"
+        },
+        {
+          "command": "perfectVba.refresh",
+          "when": "view == perfectVbaProjects && viewItem == vbaProject",
+          "group": "inline@1"
+        },
+        {
+          "command": "perfectVba.openSource",
+          "when": "view == perfectVbaProjects && viewItem == vbaProject",
+          "group": "inline@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "perfectVba.pull",
+          "when": "resourceExtname =~ /\\.(xlsm|xlsb|xlam|xls|accdb|mdb|accda)$/",
+          "group": "perfectVba@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "perfectVba.run",
+          "when": "resourceExtname =~ /\\.bas$/",
+          "group": "navigation@0"
+        },
+        {
+          "command": "perfectVba.pushActiveFile",
+          "when": "resourceExtname =~ /\\.(bas|cls|frm)$/",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "languages": [
+      {
+        "id": "vba",
+        "aliases": [
+          "VBA",
+          "Visual Basic for Applications"
+        ],
+        "extensions": [
+          ".bas",
+          ".cls",
+          ".frm"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vba",
+        "scopeName": "source.vba",
+        "path": "./syntaxes/vba.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "node esbuild.js && tsc --noEmit -p ./",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "test:unit": "mocha --require ts-node/register \"src/test/unit/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p ./"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.21.5",
+    "mocha": "^10.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

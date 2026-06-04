@@ -1,0 +1,31 @@
+# 依存・ビルド成果物
+node_modules/
+dist/
+out/
+*.vsix
+.vscode-test/
+
+# ログ・キャッシュ
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# 環境変数・秘匿情報
+.env
+.env.*
+
+# 拡張機能が生成するワークスペース（リポジトリ内でテストした場合）
+.vba/
+
+# 取り込み生成物（テスト時の一時データ）
+sample/*.xlsm
+sample/*.xlsb
+sample/*.xlam
+sample/*.accdb
+sample/*.mdb
+sample/*.frx
+
+# OS 生成ファイル
+.DS_Store
+Thumbs.db
+desktop.ini

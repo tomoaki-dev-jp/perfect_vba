@@ -1,0 +1,53 @@
+# 依存パッケージ（package-lock.json から復元可能）
+node_modules/
+
+# ビルド成果物（esbuild / `npm run package` で再生成。CI でもビルドするため追跡しない）
+dist/
+out/
+*.tsbuildinfo
+
+# パッケージ済み拡張機能（vsce package の出力）
+*.vsix
+
+# VS Code 拡張機能のテストランナーがダウンロードする実行環境
+.vscode-test/
+
+# テストカバレッジ
+coverage/
+.nyc_output/
+
+# ログ
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# 環境変数・シークレット（.env は絶対にコミットしない）
+.env
+.env.*
+!.env.example
+
+# Perfect VBA のローカル動作確認で生成される成果物
+# make-test-book.ps1 が生成するテスト用ブック
+sample/Test.xlsm
+# Office がファイルを開いている間に作る一時ロックファイル
+~$*
+# 拡張機能が取り込んだ VBA を置く既定フォルダ（perfectVba.workspaceRoot）
+.vba/
+# 取り込み時に生成されるワークスペースマニフェスト
+.perfect-vba.json
+
+# OS 生成ファイル
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# エディタ / IDE
+*.swp
+*.swo
+*~
+.idea/

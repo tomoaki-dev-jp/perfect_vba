@@ -1,0 +1,18 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# PowerShell 5.1 は BOM 無しを ANSI として読むため UTF-8 BOM を維持する
+[*.ps1]
+charset = utf-8-bom
+indent_size = 4
+
+# Markdown は行末スペース（改行）が意味を持つため保持する
+[*.md]
+trim_trailing_whitespace = false

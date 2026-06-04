@@ -1,0 +1,125 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "VBA",
+  "scopeName": "source.vba",
+  "patterns": [
+    { "include": "#header" },
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#storage" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#operators" },
+    { "include": "#declarations" },
+    { "include": "#functioncall" }
+  ],
+  "repository": {
+    "header": {
+      "patterns": [
+        {
+          "match": "^(VERSION|BEGIN|END|MultiUse|Attribute)\\b.*$",
+          "name": "meta.module-header.vba",
+          "captures": {
+            "1": { "name": "keyword.other.module-header.vba" }
+          }
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "match": "'.*$",
+          "name": "comment.line.apostrophe.vba"
+        },
+        {
+          "match": "(?i)(^|:)\\s*\\bRem\\b.*$",
+          "name": "comment.line.rem.vba"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.vba",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "match": "\"\"", "name": "constant.character.escape.vba" }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "match": "&[hH][0-9A-Fa-f]+&?", "name": "constant.numeric.hex.vba" },
+        { "match": "&[oO][0-7]+&?", "name": "constant.numeric.octal.vba" },
+        { "match": "\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?[#!@&%]?\\b", "name": "constant.numeric.vba" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(If|Then|Else|ElseIf|End\\s+If|Select|Case|End\\s+Select|For|To|Step|Next|Each|In|Do|Loop|While|Wend|Until|With|End\\s+With|GoTo|GoSub|On\\s+Error|Resume|Exit|Call|Return|Stop|End)\\b",
+          "name": "keyword.control.vba"
+        }
+      ]
+    },
+    "storage": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(Dim|Const|Private|Public|Friend|Global|Static|ReDim|Preserve|Option|Explicit|Base|Compare|Module|ByVal|ByRef|Optional|ParamArray|WithEvents|Implements|Set|Let|Get|As|New)\\b",
+          "name": "storage.modifier.vba"
+        },
+        {
+          "match": "(?i)\\b(Sub|Function|Property|Type|Enum|Declare|Event|Lib|Alias)\\b",
+          "name": "storage.type.function.vba"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(Integer|Long|LongLong|LongPtr|String|Boolean|Double|Single|Variant|Object|Byte|Currency|Date|Decimal|Collection)\\b",
+          "name": "support.type.vba"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(True|False|Nothing|Null|Empty|Me|vbCrLf|vbCr|vbLf|vbTab|vbNullString|vbNewLine)\\b",
+          "name": "constant.language.vba"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(And|Or|Not|Xor|Mod|Eqv|Imp|Is|Like|TypeOf|AddressOf)\\b",
+          "name": "keyword.operator.logical.vba"
+        },
+        {
+          "match": "(<=|>=|<>|[-+*/\\\\^&=<>])",
+          "name": "keyword.operator.vba"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(Sub|Function|Property\\s+(?:Get|Let|Set))\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.function.vba" },
+            "2": { "name": "entity.name.function.vba" }
+          }
+        }
+      ]
+    },
+    "functioncall": {
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "name": "entity.name.function.call.vba"
+        }
+      ]
+    }
+  }
+}
