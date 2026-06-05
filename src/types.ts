@@ -96,6 +96,8 @@ export interface PushPayload {
   path: string;
   headless: boolean;
   save: boolean;
+  /** true の場合、対象が開かれているインスタンスにのみ接続し、閉じていれば起動しない。 */
+  attachOnly?: boolean;
   components: PushComponent[];
 }
 

@@ -98,62 +98,106 @@ async function discoverUntrackedComponents(
   return result;
 }
 
+export type PushProgressKind = "notification" | "window" | "none";
+
+export interface RunPushOptions {
+  /** 成功トーストを抑制する（Run の前処理や自動 Push など、別途結果を出す場合）。 */
+  silent?: boolean;
+  /** Office ファイルの保存を強制/抑制する（未指定なら設定値 saveAfterPush に従う）。 */
+  save?: boolean;
+  /** 進捗表示の出し方。既定は "notification"。"none" は無表示（自動 Push 用）。 */
+  progress?: PushProgressKind;
+  /** 対象が開いているインスタンスにのみ接続し、閉じていれば起動せずスキップする。 */
+  attachOnly?: boolean;
+  /** 成功時（スキップ含む）にブリッジ結果を受け取る。 */
+  onResult?: (data: { pushed: number; skipped?: string }) => void;
+  /** 失敗時の処理を差し替える（未指定なら既定のエラーダイアログを表示）。 */
+  onError?: (err: unknown) => void;
+}
+
 /**
  * 指定レコード群を Push する共通処理。
- * @param opts.silent 成功トーストを抑制する（Run の前処理など、別途結果を出す場合）。
- * @param opts.save   Office ファイルの保存を強制/抑制する（未指定なら設定値に従う）。
- * @returns 成功したら true、失敗（ブリッジエラー）なら false。
+ * @returns 成功（またはスキップ）なら true、失敗（ブリッジエラー）なら false。
  */
 export async function runPush(
   dir: string,
   manifest: Manifest,
   records: ComponentRecord[],
-  opts?: { silent?: boolean; save?: boolean }
+  opts?: RunPushOptions
 ): Promise<boolean> {
   const cfg = getConfig();
   const fileName = path.basename(manifest.source);
+  const progressKind: PushProgressKind = opts?.progress ?? "notification";
+
+  // ファイル読み込み → ブリッジ呼び出し本体（進捗表示の有無で包み方を変える）。
+  const work = async (
+    token?: vscode.CancellationToken
+  ): Promise<{
+    hashes: Map<string, string>;
+    data: { pushed: number; skipped?: string };
+  }> => {
+    const components: PushComponent[] = [];
+    const newHashes = new Map<string, string>();
+
+    for (const rec of records) {
+      const filePath = path.join(dir, rec.file);
+      let text: string;
+      try {
+        text = await fs.readFile(filePath, "utf8");
+      } catch {
+        continue; // ファイルが無ければスキップ
+      }
+      newHashes.set(rec.name, sha256(text));
+      components.push(await buildPushComponent(dir, rec, text));
+    }
+
+    if (components.length === 0) {
+      throw new Error("書き戻す対象ファイルが見つかりませんでした。");
+    }
+
+    const { data } = await invoke<{ pushed: number; skipped?: string }>(
+      scriptFor(manifest.app, "push"),
+      {
+        path: manifest.source,
+        headless: cfg.headless,
+        save: opts?.save ?? cfg.saveAfterPush,
+        attachOnly: opts?.attachOnly ?? false,
+        components,
+      } as PushPayload,
+      bridgeOptions(cfg),
+      token
+    );
+    return { hashes: newHashes, data };
+  };
 
   try {
-    const updated = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Perfect VBA: ${fileName} へ書き戻し中...`,
-        cancellable: true,
-      },
-      async (_progress, token) => {
-        const components: PushComponent[] = [];
-        const newHashes = new Map<string, string>();
+    let result: {
+      hashes: Map<string, string>;
+      data: { pushed: number; skipped?: string };
+    };
+    if (progressKind === "none") {
+      result = await work();
+    } else {
+      result = await vscode.window.withProgress(
+        {
+          location:
+            progressKind === "window"
+              ? vscode.ProgressLocation.Window
+              : vscode.ProgressLocation.Notification,
+          title: `Perfect VBA: ${fileName} へ書き戻し中...`,
+          cancellable: progressKind === "notification",
+        },
+        (_progress, token) => work(token)
+      );
+    }
 
-        for (const rec of records) {
-          const filePath = path.join(dir, rec.file);
-          let text: string;
-          try {
-            text = await fs.readFile(filePath, "utf8");
-          } catch {
-            continue; // ファイルが無ければスキップ
-          }
-          newHashes.set(rec.name, sha256(text));
-          components.push(await buildPushComponent(dir, rec, text));
-        }
+    // attachOnly で対象が未起動だった場合は、マニフェストを更新せず結果のみ通知する。
+    if (result.data.skipped === "NOT_OPEN") {
+      opts?.onResult?.(result.data);
+      return true;
+    }
 
-        if (components.length === 0) {
-          throw new Error("書き戻す対象ファイルが見つかりませんでした。");
-        }
-
-        await invoke<{ pushed: number }>(
-          scriptFor(manifest.app, "push"),
-          {
-            path: manifest.source,
-            headless: cfg.headless,
-            save: opts?.save ?? cfg.saveAfterPush,
-            components,
-          } as PushPayload,
-          bridgeOptions(cfg),
-          token
-        );
-        return newHashes;
-      }
-    );
+    const updated = result.hashes;
 
     // VSCode 側で新規作成し今回 Push したモジュールを manifest に登録する。
     for (const rec of records) {
@@ -169,6 +213,8 @@ export async function runPush(
     await writeManifest(dir, manifest);
     await vscode.commands.executeCommand("perfectVba.refreshTree");
 
+    opts?.onResult?.(result.data);
+
     if (!opts?.silent) {
       vscode.window.showInformationMessage(
         `Perfect VBA: ${fileName} へ ${updated.size} 個のコンポーネントを書き戻しました。`
@@ -176,7 +222,8 @@ export async function runPush(
     }
     return true;
   } catch (err) {
-    await handleBridgeError(err, manifest.app);
+    if (opts?.onError) opts.onError(err);
+    else await handleBridgeError(err, manifest.app);
     return false;
   }
 }

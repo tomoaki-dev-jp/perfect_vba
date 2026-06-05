@@ -92,25 +92,33 @@ function Release-Com($o) {
 
 # ---------------- Excel ----------------
 
-function New-ExcelContext($path, $headless) {
+function New-ExcelContext($path, $headless, $attachOnly = $false) {
   $full = Resolve-OfficePath $path
-  $app = $null; $started = $false; $openedDoc = $false; $origEvents = $null
+  $started = $false; $openedDoc = $false; $origEvents = $null
   try { $app = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application') } catch { $app = $null }
-  if (-not $app) {
-    $app = New-Object -ComObject Excel.Application
-    $started = $true
-    try { $app.Visible = (-not $headless) } catch {}
-  }
 
   # 既に開いているブックを探す（ユーザーのインスタンスを尊重）
   $wb = $null
-  foreach ($w in $app.Workbooks) {
-    try { if ($w.FullName -ieq $full) { $wb = $w; break } } catch {}
+  if ($app) {
+    foreach ($w in $app.Workbooks) {
+      try { if ($w.FullName -ieq $full) { $wb = $w; break } } catch {}
+    }
   }
 
   if (-not $wb) {
-    # 自分で開く場合のみ、安全フラグを立てる（attach 時は後で元に戻す）
-    if (-not $started) { try { $origEvents = $app.EnableEvents } catch {} }
+    # attachOnly: 対象ブックが開かれていなければ Office を起動せず「未起動」を通知する
+    if ($attachOnly) {
+      return [pscustomobject]@{ App = $app; Doc = $null; Started = $false; OpenedDoc = $false; Full = $full; OrigEvents = $null; NotOpen = $true }
+    }
+    if (-not $app) {
+      $app = New-Object -ComObject Excel.Application
+      $started = $true
+      try { $app.Visible = (-not $headless) } catch {}
+    }
+    else {
+      # 自分で開く場合のみ、安全フラグを立てる（attach 時は後で元に戻す）
+      try { $origEvents = $app.EnableEvents } catch {}
+    }
     try { $app.DisplayAlerts = $false } catch {}
     try { $app.EnableEvents = $false } catch {}
     try { $app.AutomationSecurity = 3 } catch {}  # msoAutomationSecurityForceDisable: マクロ自動実行を抑止
@@ -118,7 +126,7 @@ function New-ExcelContext($path, $headless) {
     $wb = $app.Workbooks.Open($full)
     $openedDoc = $true
   }
-  return [pscustomobject]@{ App = $app; Doc = $wb; Started = $started; OpenedDoc = $openedDoc; Full = $full; OrigEvents = $origEvents }
+  return [pscustomobject]@{ App = $app; Doc = $wb; Started = $started; OpenedDoc = $openedDoc; Full = $full; OrigEvents = $origEvents; NotOpen = $false }
 }
 
 function Close-ExcelContext($ctx, $save) {
@@ -143,9 +151,9 @@ function Get-ExcelVBProject($ctx) {
 
 # ---------------- Access ----------------
 
-function New-AccessContext($path, $headless) {
+function New-AccessContext($path, $headless, $attachOnly = $false) {
   $full = Resolve-OfficePath $path
-  $app = $null; $started = $false; $openedDoc = $false
+  $started = $false; $openedDoc = $false
   try { $app = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Access.Application') } catch { $app = $null }
 
   if ($app) {
@@ -153,11 +161,16 @@ function New-AccessContext($path, $headless) {
     try { $cur = $app.CurrentProject.FullName } catch { $cur = $null }
     if ($cur -and ($cur -ieq $full)) {
       # ユーザーが開いている当該 DB にそのまま接続
-      return [pscustomobject]@{ App = $app; Started = $false; OpenedDoc = $false; Full = $full }
+      return [pscustomobject]@{ App = $app; Started = $false; OpenedDoc = $false; Full = $full; NotOpen = $false }
     }
     # 別の DB を開いている既存インスタンスは使わず、新規インスタンスを起動する
     Release-Com $app
     $app = $null
+  }
+
+  # attachOnly: 対象 DB が開かれていなければ Office を起動せず「未起動」を通知する
+  if ($attachOnly) {
+    return [pscustomobject]@{ App = $null; Started = $false; OpenedDoc = $false; Full = $full; NotOpen = $true }
   }
 
   $app = New-Object -ComObject Access.Application
@@ -168,7 +181,7 @@ function New-AccessContext($path, $headless) {
   # 排他オープン（SaveAsText/LoadFromText に必要）
   $app.OpenCurrentDatabase($full, $true)
   $openedDoc = $true
-  return [pscustomobject]@{ App = $app; Started = $started; OpenedDoc = $openedDoc; Full = $full }
+  return [pscustomobject]@{ App = $app; Started = $started; OpenedDoc = $openedDoc; Full = $full; NotOpen = $false }
 }
 
 function Close-AccessContext($ctx) {

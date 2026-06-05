@@ -7,7 +7,12 @@ $ctx = $null
 $tmp = $null
 try {
   $tmp = New-TempDir
-  $ctx = New-ExcelContext $payload.path $payload.headless
+  $ctx = New-ExcelContext $payload.path $payload.headless ([bool]$payload.attachOnly)
+  if ($ctx.NotOpen) {
+    # attachOnly で対象ブックが開かれていない → 起動せずスキップ
+    Close-ExcelContext $ctx $false; $ctx = $null
+    Write-Result @{ pushed = 0; skipped = 'NOT_OPEN' }
+  }
   $proj = Get-ExcelVBProject $ctx
 
   $count = 0

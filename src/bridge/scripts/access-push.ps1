@@ -7,7 +7,12 @@ $ctx = $null
 $tmp = $null
 try {
   $tmp = New-TempDir
-  $ctx = New-AccessContext $payload.path $payload.headless
+  $ctx = New-AccessContext $payload.path $payload.headless ([bool]$payload.attachOnly)
+  if ($ctx.NotOpen) {
+    # attachOnly で対象 DB が開かれていない → 起動せずスキップ
+    Close-AccessContext $ctx; $ctx = $null
+    Write-Result @{ pushed = 0; skipped = 'NOT_OPEN' }
+  }
   $proj = Get-AccessVBProject $ctx
 
   $count = 0

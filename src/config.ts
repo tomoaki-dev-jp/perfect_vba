@@ -10,6 +10,8 @@ export interface PerfectVbaConfig {
   saveAfterPush: boolean;
   includeDocumentModules: boolean;
   pushBeforeRun: boolean;
+  autoPushOnSave: boolean;
+  autoPushSaveOffice: boolean;
 }
 
 export function getConfig(): PerfectVbaConfig {
@@ -22,6 +24,8 @@ export function getConfig(): PerfectVbaConfig {
     saveAfterPush: c.get<boolean>("saveAfterPush", true),
     includeDocumentModules: c.get<boolean>("includeDocumentModules", true),
     pushBeforeRun: c.get<boolean>("pushBeforeRun", true),
+    autoPushOnSave: c.get<boolean>("autoPushOnSave", false),
+    autoPushSaveOffice: c.get<boolean>("autoPushSaveOffice", false),
   };
 }
 

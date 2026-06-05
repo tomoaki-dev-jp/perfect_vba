@@ -9,6 +9,7 @@ import { AppKind } from "./types";
 import { PerfectVbaTreeProvider } from "./ui/treeView";
 import { createStatusBar } from "./ui/statusBar";
 import { RunCodeLensProvider } from "./ui/runLens";
+import { AutoPushController, toggleAutoPushCommand } from "./autoPush";
 
 export function activate(context: vscode.ExtensionContext): void {
   const tree = new PerfectVbaTreeProvider();
@@ -42,12 +43,18 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("perfectVba.openSource", (arg?: unknown) =>
       openSourceCommand(arg)
     ),
+    vscode.commands.registerCommand("perfectVba.toggleAutoPush", () =>
+      toggleAutoPushCommand()
+    ),
 
     // 編集に追従して ▶ 実行 ボタンを出し直す。
     vscode.workspace.onDidSaveTextDocument(() => runLens.refresh()),
     vscode.window.onDidChangeActiveTextEditor(() => runLens.refresh()),
 
-    createStatusBar(context)
+    createStatusBar(context),
+
+    // 保存時の自動 Push（リアルタイム反映）。既定オフ・設定でオン。
+    new AutoPushController()
   );
 }
 

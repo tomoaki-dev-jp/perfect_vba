@@ -2,7 +2,7 @@
   "name": "perfect-vba",
   "displayName": "Perfect VBA",
   "description": "Excel / Access の VBA を VSCode 上で取り込み(Pull)・編集・書き戻し(Push)・実行(Run)できる拡張機能",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "tomo",
   "author": "tomo",
   "license": "MIT",
@@ -73,6 +73,11 @@
         "command": "perfectVba.openSource",
         "title": "Perfect VBA: 紐づく Office ファイルを開く",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "perfectVba.toggleAutoPush",
+        "title": "Perfect VBA: 保存時の自動 Push（リアルタイム反映）の切替",
+        "icon": "$(sync)"
       }
     ],
     "configuration": {
@@ -117,6 +122,16 @@
           "type": "boolean",
           "default": true,
           "description": "マクロ実行(Run)の前に、対象モジュール（またはプロジェクト）を自動で Push して保存する。オフにすると Office 側の現在のコードを実行する。"
+        },
+        "perfectVba.autoPushOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "VBA ファイル(.bas/.cls/.frm 等)を保存したとき、開いている Office インスタンスへ自動で Push（書き戻し）する。対象が開かれていなければ Office は起動せずスキップする。VS Code の files.autoSave と併用すると実質リアルタイムに反映できる。"
+        },
+        "perfectVba.autoPushSaveOffice": {
+          "type": "boolean",
+          "default": false,
+          "description": "自動 Push のたびに Office ファイルも保存する。既定はオフ（起動中の VBProject にコードのみ即反映し、ファイル保存は手動 Push 時に行う）。"
         }
       }
     },
