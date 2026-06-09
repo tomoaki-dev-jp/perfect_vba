@@ -92,41 +92,104 @@ function Release-Com($o) {
 
 # ---------------- Excel ----------------
 
+# ROT(Running Object Table) を使う準備。GetRunningObjectTable / CreateBindCtx を P/Invoke する。
+$script:RotTypeReady = $false
+function Initialize-RotType {
+  if ($script:RotTypeReady) { return }
+  Add-Type -Namespace PerfectVba -Name Ole32 -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("ole32.dll")]
+public static extern int GetRunningObjectTable(int reserved, out System.Runtime.InteropServices.ComTypes.IRunningObjectTable prot);
+[System.Runtime.InteropServices.DllImport("ole32.dll")]
+public static extern int CreateBindCtx(int reserved, out System.Runtime.InteropServices.ComTypes.IBindCtx ppbc);
+'@
+  $script:RotTypeReady = $true
+}
+
+# 指定パスのブックを“今まさに開いている”インスタンスを ROT から直接取得する。
+# GetActiveObject は起動中の先頭 1 インスタンスしか拾えないため、Excel が複数起動して
+# いると対象ブックを取りこぼし、別インスタンスで読み取り専用コピーを開いて書き戻しが
+# 闇に葬られる。ここでは ROT 参照のみで（＝Excel を起動せず）既に開かれているブックを返す。
+function Get-RunningWorkbookByPath($full) {
+  try { Initialize-RotType } catch { return $null }
+  $rot = $null; $bc = $null; $enum = $null; $found = $null
+  try {
+    if ([PerfectVba.Ole32]::GetRunningObjectTable(0, [ref]$rot) -ne 0) { return $null }
+    if ([PerfectVba.Ole32]::CreateBindCtx(0, [ref]$bc) -ne 0) { return $null }
+    $rot.EnumRunning([ref]$enum)
+    $mon = New-Object 'System.Runtime.InteropServices.ComTypes.IMoniker[]' 1
+    while ($enum.Next(1, $mon, [System.IntPtr]::Zero) -eq 0) {
+      $name = $null
+      try { $mon[0].GetDisplayName($bc, $null, [ref]$name) } catch { $name = $null }
+      # Excel のブックは ROT 表示名がフルパス。パス一致時のみ実体を取り出して二重確認する。
+      if ($name -and ($name -ieq $full)) {
+        $obj = $null
+        try { [void]$rot.GetObject($mon[0], [ref]$obj) } catch { $obj = $null }
+        if ($obj) {
+          # パス一致で確定。URL 化(OneDrive 等)で FullName が食い違う場合は所有アプリで判定。
+          $ok = $false
+          try { $ok = ($obj.FullName -ieq $full) } catch { $ok = $false }
+          if (-not $ok) { try { $ok = ([string]$obj.Application.Name -like '*Excel*') } catch { $ok = $false } }
+          if ($ok) { $found = $obj }
+        }
+      }
+      Release-Com $mon[0]
+      if ($found) { break }
+    }
+  } catch {
+    $found = $null
+  } finally {
+    Release-Com $enum
+    Release-Com $bc
+    Release-Com $rot
+  }
+  return $found
+}
+
 function New-ExcelContext($path, $headless, $attachOnly = $false) {
   $full = Resolve-OfficePath $path
-  $started = $false; $openedDoc = $false; $origEvents = $null
-  try { $app = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application') } catch { $app = $null }
 
-  # 既に開いているブックを探す（ユーザーのインスタンスを尊重）
-  $wb = $null
-  if ($app) {
-    foreach ($w in $app.Workbooks) {
-      try { if ($w.FullName -ieq $full) { $wb = $w; break } } catch {}
-    }
-  }
+  # 1) 対象ブックを開いている“実体のインスタンス”を ROT から直接掴む（複数起動対応）。
+  $wb = Get-RunningWorkbookByPath $full
+  $app = $null
+  if ($wb) { try { $app = $wb.Application } catch { $app = $null } }
 
+  # 2) ROT で取れなければ GetActiveObject + Workbooks 列挙にフォールバック。
   if (-not $wb) {
-    # attachOnly: 対象ブックが開かれていなければ Office を起動せず「未起動」を通知する
-    if ($attachOnly) {
-      return [pscustomobject]@{ App = $app; Doc = $null; Started = $false; OpenedDoc = $false; Full = $full; OrigEvents = $null; NotOpen = $true }
+    try { $app = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application') } catch { $app = $null }
+    if ($app) {
+      foreach ($w in $app.Workbooks) {
+        try { if ($w.FullName -ieq $full) { $wb = $w; break } } catch {}
+      }
     }
-    if (-not $app) {
-      $app = New-Object -ComObject Excel.Application
-      $started = $true
-      try { $app.Visible = (-not $headless) } catch {}
-    }
-    else {
-      # 自分で開く場合のみ、安全フラグを立てる（attach 時は後で元に戻す）
-      try { $origEvents = $app.EnableEvents } catch {}
-    }
-    try { $app.DisplayAlerts = $false } catch {}
-    try { $app.EnableEvents = $false } catch {}
-    try { $app.AutomationSecurity = 3 } catch {}  # msoAutomationSecurityForceDisable: マクロ自動実行を抑止
-    if (-not (Test-Path $full)) { throw "ファイルが見つかりません: $full" }
-    $wb = $app.Workbooks.Open($full)
-    $openedDoc = $true
   }
-  return [pscustomobject]@{ App = $app; Doc = $wb; Started = $started; OpenedDoc = $openedDoc; Full = $full; OrigEvents = $origEvents; NotOpen = $false }
+
+  # 3) 既に開かれている → ユーザーのインスタンスにそのまま接続（起動も再オープンもしない）。
+  if ($wb) {
+    return [pscustomobject]@{ App = $app; Doc = $wb; Started = $false; OpenedDoc = $false; Full = $full; OrigEvents = $null; NotOpen = $false }
+  }
+
+  # 4) attachOnly: 対象ブックが開かれていなければ Office を起動せず「未起動」を通知する。
+  if ($attachOnly) {
+    return [pscustomobject]@{ App = $app; Doc = $null; Started = $false; OpenedDoc = $false; Full = $full; OrigEvents = $null; NotOpen = $true }
+  }
+
+  # 5) 開かれていない → 自分で開く。
+  $started = $false; $origEvents = $null
+  if (-not $app) {
+    $app = New-Object -ComObject Excel.Application
+    $started = $true
+    try { $app.Visible = (-not $headless) } catch {}
+  }
+  else {
+    # 既存インスタンスを使う場合のみ、イベント設定を退避して後で戻す。
+    try { $origEvents = $app.EnableEvents } catch {}
+  }
+  try { $app.DisplayAlerts = $false } catch {}
+  try { $app.EnableEvents = $false } catch {}
+  try { $app.AutomationSecurity = 3 } catch {}  # msoAutomationSecurityForceDisable: マクロ自動実行を抑止
+  if (-not (Test-Path $full)) { throw "ファイルが見つかりません: $full" }
+  $wb = $app.Workbooks.Open($full)
+  return [pscustomobject]@{ App = $app; Doc = $wb; Started = $started; OpenedDoc = $true; Full = $full; OrigEvents = $origEvents; NotOpen = $false }
 }
 
 function Close-ExcelContext($ctx, $save) {

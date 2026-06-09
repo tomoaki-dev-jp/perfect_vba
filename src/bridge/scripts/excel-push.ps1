@@ -13,6 +13,11 @@ try {
     Close-ExcelContext $ctx $false; $ctx = $null
     Write-Result @{ pushed = 0; skipped = 'NOT_OPEN' }
   }
+  # 保存が必要なのにブックが読み取り専用 → 黙って失敗（成功偽装）させず、明確に知らせる。
+  if ($payload.save -and $ctx.Doc.ReadOnly) {
+    Close-ExcelContext $ctx $false; $ctx = $null
+    throw "対象ブックが読み取り専用で開かれているため書き戻し（保存）できません。別の Excel ウィンドウやプレビュー、OneDrive/SharePoint のロックがないか確認し、書き込み可能な状態で開き直してから再実行してください。"
+  }
   $proj = Get-ExcelVBProject $ctx
 
   $count = 0
