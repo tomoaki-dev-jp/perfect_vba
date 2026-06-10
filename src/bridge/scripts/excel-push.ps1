@@ -41,12 +41,16 @@ try {
       # 即時反映。Import の名前付け揺れ・クラスヘッダ依存・Remove 遅延を避ける）。
       # 新規は VBComponents.Add で作成してから名前を付ける。
       $target = Find-Component $proj $comp.name
-      if (-not $target) {
-        $type = if ($comp.kind -eq 'class') { $script:VBEXT_CLASS } else { $script:VBEXT_STD }
-        $target = $proj.VBComponents.Add($type)
-        try { $target.Name = $comp.name } catch {}
+      # ThisWorkbook やシートのコードビハインド(Type=100)と名前が衝突していると、
+      # 黙ってスキップ（未反映）になっていた。明確にエラーで知らせる。
+      if ($target -and $target.Type -eq $script:VBEXT_DOCUMENT) {
+        throw "モジュール '$($comp.name)' は ThisWorkbook やシートのコードビハインド（$($target.Name)）と名前が衝突しています。標準/クラスモジュールには別の名前を付けてください。"
       }
-      if ($target.Type -ne 100 -and $null -ne $comp.codeText) {
+      if (-not $target) {
+        # 新規追加。名前を付けられない場合はゴミを残さず明確なエラーにする（旧: 握りつぶし）。
+        $target = Add-StdOrClassComponent $proj $comp.name $comp.kind
+      }
+      if ($null -ne $comp.codeText) {
         Set-ModuleCodeInPlace $target $comp.codeText
       }
     }

@@ -15,6 +15,10 @@ import {
   writeManifest,
 } from "../model/manifest";
 import { importExt } from "../model/layout";
+import {
+  duplicateNamesMessage,
+  findDuplicateComponentNames,
+} from "../model/validate";
 import { handleBridgeError, pickProject } from "./shared";
 
 /** ツリー項目などから渡される、プロジェクトフォルダを指す引数。 */
@@ -128,6 +132,16 @@ export async function runPush(
   const cfg = getConfig();
   const fileName = path.basename(manifest.source);
   const progressKind: PushProgressKind = opts?.progress ?? "notification";
+
+  // VSCode 側でファイル名(=モジュール名)を二重化/typo したまま Push すると、Office 側で
+  // 同名モジュールが重複してコンパイル不能になり Push/Pull が反映されない。事前に検出して止める。
+  const dups = findDuplicateComponentNames(records);
+  if (dups.length > 0) {
+    const err = new Error(duplicateNamesMessage(dups));
+    if (opts?.onError) opts.onError(err);
+    else await handleBridgeError(err, manifest.app);
+    return false;
+  }
 
   // ファイル読み込み → ブリッジ呼び出し本体（進捗表示の有無で包み方を変える）。
   const work = async (

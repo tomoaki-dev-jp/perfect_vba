@@ -18,6 +18,7 @@ $script:VBEXT_DOCUMENT = 100
 $script:AC_FORM = 2
 $script:AC_REPORT = 3
 $script:AC_MACRO = 4
+$script:AC_MODULE = 5
 
 # stdin を生バイトで読み、UTF-8 として解釈する（リダイレクト時の文字化け対策）。
 function Read-Payload {
@@ -290,11 +291,43 @@ function Get-KindExt($kind) {
   }
 }
 
+# VBA モジュール名の比較用正規化。識別子は大文字小文字を区別しないため小文字化し、
+# 前後空白とユニコード合成の揺れ（濁点など）を吸収する。全角/半角は別名のため変えない。
+function Normalize-CompName($name) {
+  if ($null -eq $name) { return '' }
+  $s = [string]$name
+  try { $s = $s.Normalize([System.Text.NormalizationForm]::FormC) } catch {}
+  return $s.Trim().ToLowerInvariant()
+}
+
+# 名前一致するコンポーネントを返す。完全一致を最優先し、無ければ正規化一致でフォールバック。
+# 正規化一致を見ることで、ファイル名由来の前後空白・大小・合成の揺れで既存モジュールを
+# 取りこぼして無用な新規追加（→ 重複モジュール）を作る事故を防ぐ。
 function Find-Component($proj, $name) {
+  $norm = Normalize-CompName $name
+  $fallback = $null
   foreach ($c in $proj.VBComponents) {
-    if ($c.Name -eq $name) { return $c }
+    $cn = $c.Name
+    if ($cn -eq $name) { return $c }
+    if (-not $fallback -and (Normalize-CompName $cn) -eq $norm) { $fallback = $c }
   }
-  return $null
+  return $fallback
+}
+
+# std/class モジュールを新規追加し、確実に目的名を付ける。
+# 名前衝突等でリネームできない場合は、作りかけのゴミモジュールを残さず明確なエラーにする。
+# （従来は Name 設定失敗を握りつぶし、Module1 等のゴミに編集が入って重複・未反映を招いていた）
+function Add-StdOrClassComponent($proj, $name, $kind) {
+  $type = if ($kind -eq 'class') { $script:VBEXT_CLASS } else { $script:VBEXT_STD }
+  $comp = $proj.VBComponents.Add($type)
+  try {
+    $comp.Name = $name
+  }
+  catch {
+    try { $proj.VBComponents.Remove($comp) } catch {}
+    throw "モジュール '$name' を作成できません。同じ名前のモジュール/クラス/オブジェクトが既に存在するか、名前に使えない文字（前後の空白・記号・全角半角の揺れ等）が含まれています。VBE 側で重複したモジュールを削除し、ファイル名を正しいモジュール名に直してから再実行してください。"
+  }
+  return $comp
 }
 
 # エクスポートされた .bas/.cls テキストから、モジュールヘッダを除いたコード本体を返す。
